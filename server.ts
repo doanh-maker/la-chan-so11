@@ -1,14 +1,10 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { INITIAL_REPORTS } from './src/data/mockReports.js';
 import { CommunityReport } from './src/types.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Initialize Gemini AI Client
 const getGenAIClient = () => {
@@ -28,7 +24,6 @@ const getGenAIClient = () => {
     },
   });
 };
-
 const getFallbackModels = (): string[] => {
   const envModel = process.env.GEMINI_MODEL;
   const customList = process.env.GEMINI_FALLBACK_MODELS ? process.env.GEMINI_FALLBACK_MODELS.split(',').map(m => m.trim()).filter(Boolean) : [];
