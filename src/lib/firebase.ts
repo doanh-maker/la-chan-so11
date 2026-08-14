@@ -1,5 +1,13 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, User } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult, 
+  signOut as firebaseSignOut, 
+  User 
+} from 'firebase/auth';
 import { 
   getFirestore, 
   doc, 
@@ -203,13 +211,79 @@ export async function updateUserRoleInFirestore(uid: string, role: 'user' | 'mod
   }
 }
 
-// Helper function for Google Sign-In
-export async function signInWithGoogle(): Promise<UserProfile> {
-  if (auth && googleProvider) {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
+// Helper function to detect mobile browsers
+export function isMobileDevice(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(navigator.userAgent);
+}
+
+// Helper function to detect in-app webviews (Zalo, Messenger, Facebook, TikTok, Instagram...)
+export function isInAppBrowser(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || (window as any).opera || '';
+  return /FBAN|FBAV|Instagram|Line|Zalo|MicroMessenger|musical_ly|BytedanceWebview|Messenger/i.test(ua);
+}
+
+// Helper function for Google Sign-In with smart Mobile / Desktop handling
+export async function signInWithGoogle(forceRedirect = false): Promise<UserProfile | null> {
+  if (!auth || !googleProvider) {
+    throw new Error("Firebase Auth chưa được khởi tạo.");
+  }
+
+  const useRedirect = forceRedirect || isMobileDevice();
+
+  // On Mobile: Direct full-page redirect avoids popup blocker & 3rd-party cookie issues on iOS/Android
+  if (useRedirect) {
+    await signInWithRedirect(auth, googleProvider);
+    return null;
+  }
+
+  // On Desktop: Use standard popup for fast instant login
+  try {
+    const result = await signInWithPopup(auth, googleProvider);
+    const googleUser = result.user;
+    
+    const userProfile: UserProfile = {
+      uid: googleUser.uid,
+      displayName: googleUser.displayName || 'Người dùng Google',
+      email: googleUser.email || '',
+      photoURL: googleUser.photoURL || undefined
+    };
+    
+    // Save or update profile without mutating role or status
+    await saveUserProfile(userProfile);
+
+    // Always read final UserProfile from Firestore to get authoritative role
+    const fetched = await fetchUserProfile(googleUser.uid);
+    if (fetched) {
+      return fetched;
+    }
+    return { ...userProfile, role: 'user', status: 'active' };
+  } catch (err: any) {
+    console.warn("Firebase popup auth error or restricted:", err?.code, err?.message);
+    
+    // If popup was blocked by browser or closed due to iframe constraints, fallback to redirect
+    if (
+      err?.code === 'auth/popup-blocked' || 
+      err?.code === 'auth/popup-closed-by-user' ||
+      err?.code === 'auth/cancelled-popup-request' ||
+      err?.code === 'auth/operation-not-supported-in-this-environment'
+    ) {
+      console.info("Falling back to signInWithRedirect...");
+      await signInWithRedirect(auth, googleProvider);
+      return null;
+    }
+    throw err;
+  }
+}
+
+// Helper function to check if returning from a mobile redirect authentication flow
+export async function checkRedirectAuthResult(): Promise<UserProfile | null> {
+  if (!auth) return null;
+  try {
+    const result = await getRedirectResult(auth);
+    if (result && result.user) {
       const googleUser = result.user;
-      
       const userProfile: UserProfile = {
         uid: googleUser.uid,
         displayName: googleUser.displayName || 'Người dùng Google',
@@ -217,22 +291,14 @@ export async function signInWithGoogle(): Promise<UserProfile> {
         photoURL: googleUser.photoURL || undefined
       };
       
-      // Save or update profile without mutating role or status
       await saveUserProfile(userProfile);
-
-      // Always read final UserProfile from Firestore to get authoritative role
       const fetched = await fetchUserProfile(googleUser.uid);
-      if (fetched) {
-        return fetched;
-      }
-      return { ...userProfile, role: 'user', status: 'active' };
-    } catch (err: any) {
-      console.warn("Firebase popup auth error or restricted:", err?.message);
-      throw err;
+      return fetched || { ...userProfile, role: 'user', status: 'active' };
     }
+  } catch (err: any) {
+    console.warn("getRedirectResult error/info:", err?.code, err?.message);
   }
-  
-  throw new Error("Firebase Auth is not initialized.");
+  return null;
 }
 
 export async function signOutUser() {

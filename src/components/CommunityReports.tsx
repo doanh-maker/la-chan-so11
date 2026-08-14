@@ -652,22 +652,26 @@ export const CommunityReports: React.FC<CommunityReportsProps> = ({ reports, onA
     };
   };
 
-  // Handle AI Auto Extraction from Story
-  const handleAutoExtractStory = async (customStory?: string) => {
-    const textToExtract = (customStory || storyInput).trim();
-    if (!textToExtract) return;
+  // Handle AI Auto Extraction from Story & Proof Screenshots
+  const handleAutoExtractStory = async (customStory?: string, customImages?: string[]) => {
+    const textToExtract = (customStory !== undefined ? customStory : storyInput).trim();
+    const imgsToExtract = customImages || proofImages;
+
+    if (!textToExtract && imgsToExtract.length === 0) return;
 
     setIsExtractingStory(true);
     try {
       let extracted: ExtractedStoryIntelligence | null = null;
       try {
-        extracted = await extractStoryIntelligence(textToExtract);
+        extracted = await extractStoryIntelligence(textToExtract || undefined, imgsToExtract.length > 0 ? imgsToExtract : undefined);
       } catch (e) {
         console.warn("AI extraction fallback to local heuristic:", e);
       }
 
       if (!extracted || !extracted.title) {
-        extracted = extractLocalStoryDetails(textToExtract) as any;
+        if (textToExtract) {
+          extracted = extractLocalStoryDetails(textToExtract) as any;
+        }
       }
 
       if (extracted) {
@@ -684,7 +688,12 @@ export const CommunityReports: React.FC<CommunityReportsProps> = ({ reports, onA
         if (extracted.redFlags && extracted.redFlags.length > 0) setFormRedFlagsText(extracted.redFlags.join('\n'));
         if (extracted.recommendedActions && extracted.recommendedActions.length > 0) setFormRecommendedText(extracted.recommendedActions.join('\n'));
         
-        setFormDesc(textToExtract);
+        if (textToExtract) {
+          setFormDesc(textToExtract);
+        } else if (extracted.summary) {
+          setFormDesc(extracted.summary);
+          setStoryInput(extracted.summary);
+        }
         setStoryExtracted(true);
       }
     } finally {
@@ -1069,12 +1078,11 @@ export const CommunityReports: React.FC<CommunityReportsProps> = ({ reports, onA
                     <label className="block text-xs font-extrabold text-[#1C1B1F] flex items-center justify-between">
                       <span>Kể lại những gì bạn đã trải qua (*):</span>
                       <span className="text-[11px] font-normal text-[#74777F]">
-                        (Viết tự nhiên: thời gian, SĐT gọi đến, STK chuyển tiền, lời hứa hẹn, số tiền...)
+                        (Viết tự nhiên hoặc tải ảnh chụp tin nhắn, SMS, hóa đơn chuyển tiền)
                       </span>
                     </label>
                     <textarea
-                      rows={5}
-                      required
+                      rows={4}
                       value={storyInput}
                       onChange={(e) => {
                         setStoryInput(e.target.value);
@@ -1085,30 +1093,72 @@ export const CommunityReports: React.FC<CommunityReportsProps> = ({ reports, onA
                     />
                   </div>
 
+                  {/* Upload Screenshots in Story Mode */}
+                  <div className="p-3 bg-[#F8F9FE] border border-[#E1E2E9] rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#1C1B1F] flex items-center gap-1.5">
+                        <ImageIcon className="w-4 h-4 text-[#0061A4]" />
+                        Đính kèm ảnh chụp màn hình (Tin nhắn Zalo/Telegram, SMS, biên lai chuyển tiền, lệnh bắt giả):
+                      </span>
+                      {proofImages.length > 0 && (
+                        <span className="text-[11px] font-extrabold text-[#0061A4] bg-[#D1E4FF] px-2 py-0.5 rounded-full">
+                          Đã chọn {proofImages.length} ảnh
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="px-3.5 py-2 rounded-xl bg-white hover:bg-[#E7E8EE] border border-[#E1E2E9] text-xs font-bold text-[#0061A4] cursor-pointer transition flex items-center space-x-1.5 shadow-2xs">
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span>Chọn ảnh chụp màn hình</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={handleProofImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+
+                      {proofImages.map((img, idx) => (
+                        <div key={idx} className="relative w-14 h-14 rounded-xl border border-[#E1E2E9] overflow-hidden group shadow-2xs">
+                          <img src={img} alt={`Proof ${idx}`} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeProofImage(idx)}
+                            className="absolute top-0.5 right-0.5 bg-black/70 hover:bg-red-600 text-white rounded-full p-0.5 transition cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* AI Extraction Trigger Button */}
-                  <div className="flex items-center justify-between gap-3 bg-[#F0F4FA] p-3 rounded-2xl border border-[#D1E4FF]">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-[#F0F4FA] p-3.5 rounded-2xl border border-[#D1E4FF]">
                     <div className="flex items-center space-x-2">
                       <Sparkles className="w-5 h-5 text-[#0061A4] animate-pulse shrink-0" />
                       <p className="text-xs text-[#004B80] font-medium leading-tight">
-                        Trợ lý AI sẽ tự động phân tích lời kể và trích xuất SĐT, STK, link độc hại, loại lừa đảo...
+                        Trợ lý AI sẽ đọc hiểu lời kể & OCR nhận diện dữ liệu từ ảnh chụp màn hình để trích xuất SĐT, STK, link độc hại...
                       </p>
                     </div>
 
                     <button
                       type="button"
-                      disabled={isExtractingStory || !storyInput.trim()}
+                      disabled={isExtractingStory || (!storyInput.trim() && proofImages.length === 0)}
                       onClick={() => handleAutoExtractStory()}
-                      className="px-4 py-2 rounded-xl bg-[#0061A4] hover:bg-[#004B80] disabled:opacity-50 text-white text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-[#0061A4] hover:bg-[#004B80] disabled:opacity-50 text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow-xs"
                     >
                       {isExtractingStory ? (
                         <>
                           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                          <span>Đang Bóc Tách...</span>
+                          <span>Đang OCR & Bóc Tách...</span>
                         </>
                       ) : (
                         <>
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>✨ AI Bóc Tách Chi Tiết</span>
+                          <span>✨ AI Bóc Tách Chi Tiết (Lời kể & Ảnh)</span>
                         </>
                       )}
                     </button>

@@ -1,10 +1,14 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { INITIAL_REPORTS } from './src/data/mockReports.js';
 import { CommunityReport } from './src/types.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Initialize Gemini AI Client
 const getGenAIClient = () => {
@@ -24,6 +28,7 @@ const getGenAIClient = () => {
     },
   });
 };
+
 const getFallbackModels = (): string[] => {
   const envModel = process.env.GEMINI_MODEL;
   const customList = process.env.GEMINI_FALLBACK_MODELS ? process.env.GEMINI_FALLBACK_MODELS.split(',').map(m => m.trim()).filter(Boolean) : [];
@@ -214,13 +219,7 @@ function getMockSimulationFallback(scenario: any, userMsg: string, actionTaken: 
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
-app.use((req, res, next) => {
-  res.setHeader(
-    'Cross-Origin-Opener-Policy',
-    'same-origin-allow-popups'
-  );
-  next();
-});
+
   app.use(express.json({ limit: '10mb' }));
 
   // Production request logger
@@ -667,27 +666,28 @@ Phong cách giao tiếp:
     res.status(201).json(newReport);
   });
 
-  // API 4.1: AI Story to Threat Intelligence Extraction
+  // API 4.1: AI Story & Screenshot Proof Threat Intelligence Extraction
   app.post('/api/extract-story-intelligence', async (req, res) => {
     try {
-      const storyText = sanitizeText(req.body.story, 6000);
-      if (!storyText || storyText.length < 15) {
-        return res.status(400).json({ message: 'Vui lòng nhập chi tiết câu chuyện hoặc diễn biến vụ việc (tối thiểu 15 ký tự).' });
+      const storyText = sanitizeText(req.body.story, 6000) || '';
+      const images: string[] = Array.isArray(req.body.images) ? req.body.images : [];
+
+      if (!storyText && images.length === 0) {
+        return res.status(400).json({ message: 'Vui lòng nhập lời kể diễn biến hoặc tải lên ảnh chụp màn hình bằng chứng (SMS, chuyển khoản, tin nhắn...).' });
       }
 
       const ai = getGenAIClient();
       const prompt = `
 Bạn là Chuyên gia Điều tra Tội phạm Mạng & Bóc Tách Dấu Vết của "Lá Chắn Số AI" Việt Nam.
-Nạn nhân hoặc người dùng vừa chia sẻ câu chuyện / diễn biến vụ lừa đảo sau đây bằng ngôn ngữ tự nhiên:
-"""
-${storyText}
-"""
+Nạn nhân hoặc người dùng vừa cung cấp thông tin vụ việc lừa đảo:
+${storyText ? `\n--- LỜI KỂ CỦA NGƯỜI DÙNG ---\n"""\n${storyText}\n"""\n` : ''}
+${images.length > 0 ? `\n(Kèm theo ${images.length} ảnh chụp màn hình bằng chứng giao dịch, tin nhắn, lệnh bắt giả hoặc SMS brandname. Hãy OCR kỹ từng chi tiết trong ảnh).` : ''}
 
-Nhiệm vụ của bạn là đọc hiểu tường tận câu chuyện, trích xuất tất cả dữ liệu dấu vết đối tượng và cấu trúc lại để lập hồ sơ cảnh báo cộng đồng:
-1. Đặt một tiêu đề thật rõ ràng, cảnh báo cụ thể (ví dụ: "Giả danh shipper GHTK gọi điện yêu cầu nạp 250k phí hoàn đơn", "SMS mạo danh Vietcombank yêu cầu đổi mật khẩu gấp").
+Nhiệm vụ của bạn là phân tích kỹ toàn bộ lời kể và ảnh chụp bằng chứng (nếu có), trích xuất tất cả dữ liệu dấu vết đối tượng và cấu trúc lại để lập hồ sơ cảnh báo cộng đồng:
+1. Đặt một tiêu đề thật rõ ràng, cảnh báo cụ thể (ví dụ: "Giả danh shipper GHTK gọi điện yêu cầu nạp 250k phí hoàn đơn", "SMS mạo danh Vietcombank yêu cầu đổi mật khẩu gấp", "Giả danh Công an dọa án ma túy ép chuyển tiền BIDV").
 2. Phân loại loại hình lừa đảo (scamType: "BANK_IMPERSONATION" | "GOVERNMENT_AUTHORITY" | "JOB_VACANCY" | "E_COMMERCE_PRIZE" | "CREDIT_LOAN" | "DEEPFAKE_CALL" | "OTHER").
-3. Trích xuất SĐT kẻ lừa đảo (nếu có nhắc đến, ví dụ: 0901234567, 038xxx).
-4. Trích xuất Số tài khoản ngân hàng (nếu có), Tên ngân hàng (VCB, MB, Techcombank...), Tên chủ tài khoản thụ hưởng (viết HOA).
+3. Trích xuất SĐT kẻ lừa đảo (nếu có nhắc đến hoặc thấy trong ảnh chụp cuộc gọi/tin nhắn, ví dụ: 0901234567, 038xxx).
+4. Trích xuất Số tài khoản ngân hàng (nếu có), Tên ngân hàng (VCB, MB, Techcombank, BIDV...), Tên chủ tài khoản thụ hưởng (viết HOA).
 5. Trích xuất Link website / App độc hại / Nhóm Telegram / Zalo (nếu có).
 6. Trích xuất Kênh tiếp cận (ví dụ: "Cuộc gọi thoại + Zalo", "SMS Brandname", "Tin nhắn Telegram", "Facebook Ads").
 7. Trích xuất số tiền thiệt hại hoặc kẻ gian yêu cầu (ví dụ: "30.000.000 VNĐ", "500.000 VNĐ", "Chưa chuyển").
@@ -716,12 +716,29 @@ Trả về định dạng JSON thuần túy:
 }
 `;
 
+      const contents: any[] = [];
+      // Add images if provided
+      for (const img of images.slice(0, 3)) {
+        if (typeof img === 'string' && img.startsWith('data:')) {
+          const match = img.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+          if (match) {
+            contents.push({
+              inlineData: {
+                mimeType: match[1],
+                data: match[2]
+              }
+            });
+          }
+        }
+      }
+      contents.push(prompt);
+
       let extractedResult: any = null;
       for (const model of FALLBACK_MODELS) {
         try {
           const response = await ai.models.generateContent({
             model,
-            contents: prompt,
+            contents: contents.length === 1 ? prompt : contents,
             config: {
               responseMimeType: 'application/json',
               temperature: 0.2,

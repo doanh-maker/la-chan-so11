@@ -24,7 +24,8 @@ import {
   addFirestoreScanHistory,
   fetchUserProfile,
   saveUserProfile,
-  updateUserRoleInFirestore
+  updateUserRoleInFirestore,
+  checkRedirectAuthResult
 } from './lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -64,9 +65,20 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  // Sync Firebase Auth state & Firestore user document
+  // Sync Firebase Auth state & Firestore user document (Desktop Popup & Mobile Redirect)
   useEffect(() => {
     if (auth) {
+      // Check redirect auth result for mobile
+      checkRedirectAuthResult()
+        .then((redirectUser) => {
+          if (redirectUser) {
+            addToast(`Chào mừng ${redirectUser.displayName}! Đăng nhập thành công.`, 'success');
+          }
+        })
+        .catch((err) => {
+          console.warn("Mobile redirect auth result error:", err);
+        });
+
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
           // Single Source of Truth: Fetch user profile directly from Firestore

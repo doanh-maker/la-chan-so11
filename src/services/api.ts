@@ -299,11 +299,11 @@ export interface ExtractedStoryIntelligence {
   recommendedActions?: string[];
 }
 
-export async function extractStoryIntelligence(story: string): Promise<ExtractedStoryIntelligence> {
+export async function extractStoryIntelligence(story?: string, images?: string[]): Promise<ExtractedStoryIntelligence> {
   const response = await fetch('/api/extract-story-intelligence', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ story }),
+    body: JSON.stringify({ story, images }),
   });
 
   if (!response.ok) {

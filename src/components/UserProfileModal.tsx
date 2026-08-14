@@ -1225,7 +1225,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             Đóng Dashboard
           </button>
         </div>
-    </div>
+      </div>
     </div>
   );
 };
