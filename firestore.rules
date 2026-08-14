@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        getUserData().role == 'admin'
+      );
+    }
+
+    function isModeratorOrAdmin() {
+      return isSignedIn() && (
+        getUserData().role == 'admin' || getUserData().role == 'moderator'
+      );
+    }
+
+    // Default Deny All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      // On creation, non-admin user MUST set role to 'user' and status to 'active'
+      allow create: if isOwner(userId)
+        && incoming().uid == userId
+        && incoming().displayName is string
+        && incoming().displayName.size() <= 100
+        && incoming().email is string
+        && incoming().email.size() <= 150
+        && (incoming().role == 'user' || isAdmin())
+        && (incoming().status == 'active' || isAdmin());
+      
+      // On update, user cannot change role or status unless they are Admin
+      allow update: if (isOwner(userId) && incoming().role == existing().role && incoming().status == existing().status)
+        || isAdmin();
+        
+      allow delete: if isAdmin();
+    }
+
+    // Community Reports
+    match /community_reports/{reportId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+        && incoming().reporterUid == request.auth.uid
+        && incoming().title is string && incoming().title.size() > 0 && incoming().title.size() <= 200
+        && incoming().description is string && incoming().description.size() > 0 && incoming().description.size() <= 5000
+        && incoming().scamType is string;
+      
+      // Allow upvotes or comments counter updates by signed-in users, or full update by owner/admin/moderator
+      allow update: if isSignedIn() && (
+        (resource.data.reporterUid == request.auth.uid && incoming().reporterUid == request.auth.uid) ||
+        isModeratorOrAdmin() ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['upvotes']) ||
+        incoming().diff(existing()).affectedKeys().hasOnly(['commentsCount'])
+      );
+      
+      allow delete: if isSignedIn() && (
+        resource.data.reporterUid == request.auth.uid ||
+        isModeratorOrAdmin()
+      );
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isSignedIn()
+          && incoming().content is string
+          && incoming().content.size() > 0
+          && incoming().content.size() <= 1000;
+        allow update, delete: if isSignedIn() && (
+          resource.data.authorUid == request.auth.uid ||
+          isModeratorOrAdmin()
+        );
+      }
+    }
+
+    // Scan History
+    match /scan_history/{scanId} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn()
+        && incoming().uid == request.auth.uid
+        && incoming().riskScore is number;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Chat Sessions
+    match /chat_sessions/{sessionId} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn()
+        && incoming().uid == request.auth.uid
+        && incoming().title is string
+        && incoming().title.size() <= 200;
+      allow update: if isSignedIn()
+        && resource.data.uid == request.auth.uid
+        && incoming().uid == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+  }
+}

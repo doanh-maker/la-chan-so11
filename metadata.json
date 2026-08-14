@@ -1,0 +1,8 @@
+{
+  "name": "Remix Lá Chắn Số AI",
+  "description": "Ứng dụng AI nhận diện và phòng chống lừa đảo trực tuyến dành cho người Việt Nam với Google Gemini AI",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

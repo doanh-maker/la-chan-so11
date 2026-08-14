@@ -1,0 +1,109 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account profile details",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "photoURL": { "type": "string", "maxLength": 1000 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "email"]
+    },
+    "CommunityReport": {
+      "title": "Community Report",
+      "description": "Scam community report submitted by user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "reporterName": { "type": "string", "maxLength": 100 },
+        "reporterAvatar": { "type": "string", "maxLength": 1000 },
+        "scamType": { "type": "string" },
+        "scamTypeNameVi": { "type": "string", "maxLength": 100 },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string", "maxLength": 5000 },
+        "targetPhone": { "type": "string", "maxLength": 30 },
+        "targetBankAccount": { "type": "string", "maxLength": 40 },
+        "targetBankName": { "type": "string", "maxLength": 100 },
+        "targetUrl": { "type": "string", "maxLength": 500 },
+        "targetSocialHandle": { "type": "string", "maxLength": 100 },
+        "locationName": { "type": "string", "maxLength": 100 },
+        "proofImages": { "type": "array" },
+        "upvotes": { "type": "number" },
+        "commentsCount": { "type": "number" },
+        "verifiedStatus": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "reportedDate": { "type": "string" },
+        "reporterUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["title", "description", "scamType"]
+    },
+    "ReportComment": {
+      "title": "Report Comment",
+      "description": "Comment on a community report",
+      "type": "object",
+      "properties": {
+        "authorName": { "type": "string", "maxLength": 100 },
+        "authorAvatar": { "type": "string", "maxLength": 1000 },
+        "content": { "type": "string", "maxLength": 1000 },
+        "timestamp": { "type": "number" },
+        "authorUid": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["content"]
+    },
+    "ScanHistoryItem": {
+      "title": "Scan History Item",
+      "description": "Saved scam or website scan result",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "riskScore": { "type": "number" },
+        "riskLevel": { "type": "string" },
+        "scamType": { "type": "string" },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["uid", "riskScore", "riskLevel"]
+    },
+    "ChatSession": {
+      "title": "Chat Session",
+      "description": "AI Assistant chat history session",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "uid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "number" },
+        "updatedAt": { "type": "number" },
+        "messages": { "type": "array" }
+      },
+      "required": ["id", "title"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile document path"
+    },
+    "/community_reports/{reportId}": {
+      "schema": { "$ref": "#/entities/CommunityReport" },
+      "description": "Community scam reports collection"
+    },
+    "/community_reports/{reportId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/ReportComment" },
+      "description": "Subcollection for report comments"
+    },
+    "/scan_history/{scanId}": {
+      "schema": { "$ref": "#/entities/ScanHistoryItem" },
+      "description": "User scan history records"
+    },
+    "/chat_sessions/{sessionId}": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "Saved AI chat sessions"
+    }
+  }
+}
