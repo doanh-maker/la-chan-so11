@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { 
   getAuth, 
+  initializeAuth,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  indexedDBLocalPersistence,
+  inMemoryPersistence,
   GoogleAuthProvider, 
   signInWithPopup, 
   signInWithRedirect, 
@@ -37,7 +42,26 @@ let googleProvider: GoogleAuthProvider;
 
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  auth = getAuth(app);
+  
+  // Safe Auth initialization with robust persistence hierarchy for mobile/incognito/webview environments:
+  // 1. indexedDBLocalPersistence
+  // 2. browserLocalPersistence (localStorage fallback when IndexedDB is closed/hidden)
+  // 3. browserSessionPersistence
+  // 4. inMemoryPersistence
+  try {
+    auth = initializeAuth(app, {
+      persistence: [
+        indexedDBLocalPersistence,
+        browserLocalPersistence,
+        browserSessionPersistence,
+        inMemoryPersistence
+      ]
+    });
+  } catch (_e) {
+    // If initializeAuth fails or auth is already initialized for this app
+    auth = getAuth(app);
+  }
+
   db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
   googleProvider = new GoogleAuthProvider();
   googleProvider.setCustomParameters({ prompt: 'select_account' });

@@ -48,14 +48,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     } catch (err: any) {
       console.error("Auth error details:", err);
       let msg = 'Đã có lỗi xảy ra khi xác thực Google.';
+      const errStr = String(err?.message || err || '');
+      
       if (err?.code === 'auth/unauthorized-domain') {
         msg = `Tên miền hiện tại (${window.location.hostname}) chưa được thêm vào mục "Authorized Domains" trong Firebase Console. Vui lòng thêm domain này để cho phép đăng nhập.`;
       } else if (err?.code === 'auth/popup-blocked') {
-        msg = 'Trình duyệt của bạn đã chặn cửa sổ Popup. Vui lòng bấm "Đăng nhập bằng Chuyển hướng (Mobile)" bên dưới.';
+        msg = 'Trình duyệt di động đã chặn cửa sổ Popup. Vui lòng chọn "Đăng nhập bằng Chuyển hướng (Mobile)" bên dưới.';
       } else if (err?.code === 'auth/popup-closed-by-user') {
         msg = 'Cửa sổ đăng nhập đã bị đóng trước khi hoàn tất.';
       } else if (err?.code === 'auth/network-request-failed') {
         msg = 'Lỗi kết nối mạng hoặc tường lửa chặn kết nối tới Firebase/Google.';
+      } else if (errStr.includes('closing') || errStr.includes('hidden') || errStr.includes('Database is closing')) {
+        msg = 'Trình duyệt di động tạm thời đóng kết nối lưu trữ ngầm. Hệ thống đang tự động chuyển hướng đăng nhập trực tiếp...';
+        // Auto fallback retry with direct redirect on mobile
+        try {
+          await signInWithGoogle(true);
+          return;
+        } catch (_retryErr) {
+          msg = 'Vui lòng tải lại trang hoặc bấm "Chuyển hướng toàn trang" bên dưới để đăng nhập.';
+        }
       } else if (err?.message) {
         msg = err.message;
       }
