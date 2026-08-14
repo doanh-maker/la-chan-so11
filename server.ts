@@ -1,24 +1,25 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI, Type } from '@google/genai';
 import { INITIAL_REPORTS } from './src/data/mockReports.js';
 import { CommunityReport } from './src/types.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // Initialize Gemini AI Client
 const getGenAIClient = () => {
   let apiKey = process.env.GEMINI_API_KEY;
+
   if (apiKey) {
     apiKey = apiKey.replace(/^["']|["']$/g, '').trim();
   }
+
   if (!apiKey) {
-    console.warn("⚠️ Warning: GEMINI_API_KEY is missing. AI analysis will operate with default guidance mode.");
+    console.warn(
+      "⚠️ Warning: GEMINI_API_KEY is missing. AI analysis will operate with default guidance mode."
+    );
   }
+
   return new GoogleGenAI({
     apiKey: apiKey || "MISSING_KEY",
     httpOptions: {
